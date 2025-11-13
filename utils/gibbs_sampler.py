@@ -245,33 +245,17 @@ def run_gibbs_hc_order_adjacency(grid, K, adjacency_matrix, current_vertex_idx):
     
     return grid, next_vertex_idx
 
-def update_adjacency_matrix(adjacency_matrix, K, random_order=True):
+def _calculate_missing_edges(adjacency_matrix, K):
     """
-    Add one edge to the adjacency matrix for regular hardcore grid connections.
-    Each call adds exactly one missing edge until all hardcore connections are complete.
-    Each node (i, j) should eventually be connected to its 4 neighbors: top (i-1, j),
-    bottom (i+1, j), left (i, j-1), and right (i, j+1), if they exist.
+    Helper function to calculate all missing edges that should exist in a hardcore grid.
     
     Args:
-        adjacency_matrix: (K*K) x (K*K) adjacency matrix to update
+        adjacency_matrix: (K*K) x (K*K) adjacency matrix
         K: Size of the grid (KxK)
-        random_order: If True, adds a random missing edge. If False, adds edges in order.
     
     Returns:
-        adjacency_matrix: Updated adjacency matrix with one more edge added
-        has_more_edges: Boolean indicating if there are more edges to add
+        missing_edges_set: Set of tuples (u, v) where u < v, representing missing edges
     """
-    n_vertices = K * K
-    
-    # Ensure adjacency matrix has the correct shape
-    if adjacency_matrix.shape != (n_vertices, n_vertices):
-        raise ValueError(
-            f"Adjacency matrix shape {adjacency_matrix.shape} is not compatible. "
-            f"Expected ({n_vertices}, {n_vertices}) for a {K}x{K} grid."
-        )
-    
-    # Collect all missing edges that should exist in a hardcore grid
-    # Use set to avoid duplicates (since (u,v) and (v,u) represent the same edge)
     missing_edges_set = set()
     
     for i in range(K):
@@ -304,12 +288,46 @@ def update_adjacency_matrix(adjacency_matrix, K, random_order=True):
                 if adjacency_matrix[u, v_right] == 0:  # Edge doesn't exist yet
                     missing_edges_set.add((min(u, v_right), max(u, v_right)))
     
+    return missing_edges_set
+
+def update_adjacency_matrix(adjacency_matrix, K, random_order=True, missing_edges_set=None):
+    """
+    Add one edge to the adjacency matrix for regular hardcore grid connections.
+    Each call adds exactly one missing edge until all hardcore connections are complete.
+    Each node (i, j) should eventually be connected to its 4 neighbors: top (i-1, j),
+    bottom (i+1, j), left (i, j-1), and right (i, j+1), if they exist.
+    
+    Args:
+        adjacency_matrix: (K*K) x (K*K) adjacency matrix to update
+        K: Size of the grid (KxK)
+        random_order: If True, adds a random missing edge. If False, adds edges in order.
+        missing_edges_set: Optional set of missing edges. If None, will be calculated.
+                          Pass this recursively to avoid recalculating on each call.
+    
+    Returns:
+        adjacency_matrix: Updated adjacency matrix with one more edge added
+        has_more_edges: Boolean indicating if there are more edges to add
+        missing_edges_set: Updated set of missing edges (for recursive use)
+    """
+    n_vertices = K * K
+    
+    # Ensure adjacency matrix has the correct shape
+    if adjacency_matrix.shape != (n_vertices, n_vertices):
+        raise ValueError(
+            f"Adjacency matrix shape {adjacency_matrix.shape} is not compatible. "
+            f"Expected ({n_vertices}, {n_vertices}) for a {K}x{K} grid."
+        )
+    
+    # Calculate missing edges if not provided
+    if missing_edges_set is None:
+        missing_edges_set = _calculate_missing_edges(adjacency_matrix, K)
+    
     # Convert set to list for easier handling
     missing_edges = list(missing_edges_set)
     
     # If no missing edges, return unchanged
     if len(missing_edges) == 0:
-        return adjacency_matrix, False
+        return adjacency_matrix, False, missing_edges_set
     
     # Select one edge to add
     if random_order:
@@ -323,7 +341,10 @@ def update_adjacency_matrix(adjacency_matrix, K, random_order=True):
     adjacency_matrix[u, v] = 1
     adjacency_matrix[v, u] = 1
     
-    # Check if there are more edges to add
-    has_more_edges = len(missing_edges) > 1
+    # Remove the edge we just added from the missing edges set
+    missing_edges_set.remove((u, v))
     
-    return adjacency_matrix, has_more_edges
+    # Check if there are more edges to add
+    has_more_edges = len(missing_edges_set) > 0
+    
+    return adjacency_matrix, has_more_edges, missing_edges_set

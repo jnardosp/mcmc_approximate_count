@@ -244,3 +244,86 @@ def run_gibbs_hc_order_adjacency(grid, K, adjacency_matrix, current_vertex_idx):
     next_vertex_idx = (current_vertex_idx + 1) % n_vertices
     
     return grid, next_vertex_idx
+
+def update_adjacency_matrix(adjacency_matrix, K, random_order=True):
+    """
+    Add one edge to the adjacency matrix for regular hardcore grid connections.
+    Each call adds exactly one missing edge until all hardcore connections are complete.
+    Each node (i, j) should eventually be connected to its 4 neighbors: top (i-1, j),
+    bottom (i+1, j), left (i, j-1), and right (i, j+1), if they exist.
+    
+    Args:
+        adjacency_matrix: (K*K) x (K*K) adjacency matrix to update
+        K: Size of the grid (KxK)
+        random_order: If True, adds a random missing edge. If False, adds edges in order.
+    
+    Returns:
+        adjacency_matrix: Updated adjacency matrix with one more edge added
+        has_more_edges: Boolean indicating if there are more edges to add
+    """
+    n_vertices = K * K
+    
+    # Ensure adjacency matrix has the correct shape
+    if adjacency_matrix.shape != (n_vertices, n_vertices):
+        raise ValueError(
+            f"Adjacency matrix shape {adjacency_matrix.shape} is not compatible. "
+            f"Expected ({n_vertices}, {n_vertices}) for a {K}x{K} grid."
+        )
+    
+    # Collect all missing edges that should exist in a hardcore grid
+    # Use set to avoid duplicates (since (u,v) and (v,u) represent the same edge)
+    missing_edges_set = set()
+    
+    for i in range(K):
+        for j in range(K):
+            # Convert 2D grid position (i, j) to 1D vertex index (row-major order)
+            u = i * K + j
+            
+            # Check top neighbor (i-1, j)
+            if i > 0:
+                v_top = (i - 1) * K + j
+                if adjacency_matrix[u, v_top] == 0:  # Edge doesn't exist yet
+                    # Store with smaller index first to avoid duplicates
+                    missing_edges_set.add((min(u, v_top), max(u, v_top)))
+            
+            # Check bottom neighbor (i+1, j)
+            if i < K - 1:
+                v_bottom = (i + 1) * K + j
+                if adjacency_matrix[u, v_bottom] == 0:  # Edge doesn't exist yet
+                    missing_edges_set.add((min(u, v_bottom), max(u, v_bottom)))
+            
+            # Check left neighbor (i, j-1)
+            if j > 0:
+                v_left = i * K + (j - 1)
+                if adjacency_matrix[u, v_left] == 0:  # Edge doesn't exist yet
+                    missing_edges_set.add((min(u, v_left), max(u, v_left)))
+            
+            # Check right neighbor (i, j+1)
+            if j < K - 1:
+                v_right = i * K + (j + 1)
+                if adjacency_matrix[u, v_right] == 0:  # Edge doesn't exist yet
+                    missing_edges_set.add((min(u, v_right), max(u, v_right)))
+    
+    # Convert set to list for easier handling
+    missing_edges = list(missing_edges_set)
+    
+    # If no missing edges, return unchanged
+    if len(missing_edges) == 0:
+        return adjacency_matrix, False
+    
+    # Select one edge to add
+    if random_order:
+        # Add a random missing edge
+        u, v = random.choice(missing_edges)
+    else:
+        # Add the first missing edge (in order)
+        u, v = missing_edges[0]
+    
+    # Add the edge (undirected graph, so set both directions)
+    adjacency_matrix[u, v] = 1
+    adjacency_matrix[v, u] = 1
+    
+    # Check if there are more edges to add
+    has_more_edges = len(missing_edges) > 1
+    
+    return adjacency_matrix, has_more_edges
